@@ -25,14 +25,14 @@ const TripTracker = () => {
   const [alertType, setAlertType] = useState(null);
   const [showAlert, setShowAlert] = useState(false);
 
-  const showAlertHandler = (message, type) => {
+  const showAlertHandler = useCallback((message, type) => {
     setAlertMessage(message);
     setAlertType(type);
     setShowAlert(true);
     setTimeout(() => {
       setShowAlert(false);
     }, 3000); // Alert disappears after 3 seconds
-  };
+  }, []);
 
   const toMiles = useCallback((km) => km * 0.621371, []);
 
@@ -138,7 +138,7 @@ const TripTracker = () => {
         setStatus("Ready to track your trips"); // Reset status if start fails
       }
     );
-  }, [getAddressFromCoords, status, showAlertHandler]); // Added showAlertHandler to dependencies
+  }, [getAddressFromCoords, status, showAlertHandler]);
 
   const handleEndTrip = useCallback(() => {
     navigator.geolocation.getCurrentPosition(
@@ -206,7 +206,7 @@ const TripTracker = () => {
     fetchTrips,
     startTime,
     startAddress,
-    showAlertHandler, // Added showAlertHandler to dependencies
+    showAlertHandler,
   ]);
 
   useEffect(() => {
@@ -216,6 +216,18 @@ const TripTracker = () => {
   console.log("Current tripHistory state:", tripHistory); // Add this line
   return (
     <Container className="my-4">
+      <style type="text/css">
+        {`
+          .overlay-alert {
+            position: fixed; /* Or absolute */
+            top: 20px;      /* Adjust as needed */
+            left: 50%;     /* Center horizontally */
+            transform: translateX(-50%); /* Adjust for centering */
+            z-index: 1050;  /* Higher than most other elements */
+            width: 80%;    /* Adjust width as needed */
+          }
+        `}
+      </style>
       <Row className="justify-content-center mb-4">
         <Col md={8} className="text-center">
           <h1 className="display-5">📍 Personal Mileage Tracker</h1>
@@ -244,6 +256,7 @@ const TripTracker = () => {
               variant={alertType}
               onClose={() => setShowAlert(false)}
               dismissible
+              className="overlay-alert"
             >
               {alertMessage}
             </Alert>
