@@ -19,7 +19,13 @@ root.render(
 reportWebVitals();
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/service-worker.js").then(() => {
-    console.log("Service Worker Registered");
+  navigator.serviceWorker.ready.then((registration) => {
+    registration.unregister().then(function (unregistered) {
+      if (unregistered) {
+        console.log("Service Worker Unregistered");
+      } else {
+        console.log("Service Worker Unregistration Failed");
+      }
+    });
   });
 }

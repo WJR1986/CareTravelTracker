@@ -8,17 +8,46 @@ import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
 import Table from "react-bootstrap/Table";
 
+const Maps_API_KEY = process.env.REACT_APP_Maps_API_KEY; // Get API key from .env
+
 const TripTracker = () => {
   const [startTime, setStartTime] = useState(null);
   const [startCoords, setStartCoords] = useState(null);
+  const [startAddress, setStartAddress] = useState(null);
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
+  const [googleMaps, setGoogleMaps] = useState(null);
+
+  useEffect(() => {
+    console.log("TripTracker component mounted");
+    if (!window.google || !window.google.maps) {
+      // Check if the API is already in the window
+      const script = document.createElement("script");
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${Maps_API_KEY}&libraries=places`;
+      script.async = true;
+      script.defer = true;
+      script.onload = () => {
+        setGoogleMaps(window.google.maps);
+        console.log("Google Maps API loaded successfully!");
+      };
+      document.head.appendChild(script);
+    } else {
+      setGoogleMaps(window.google.maps); // If already loaded, set the state
+      console.log("Google Maps API was already loaded.");
+    }
+    fetchTrips();
+
+    return () => {
+      console.log("TripTracker component unmounted");
+      // Any cleanup logic can go here
+    };
+  }, []);
 
   const toMiles = (km) => km * 0.621371;
 
   const getDistanceInMiles = (start, end) => {
     const toRad = (value) => (value * Math.PI) / 180;
-    const R = 6371; // Earth's radius in km
+    const R = 6371;
 
     const dLat = toRad(end.lat - start.lat);
     const dLon = toRad(end.lng - start.lng);
@@ -35,56 +64,109 @@ const TripTracker = () => {
     return toMiles(distanceKm);
   };
 
+  const getAddressFromCoords = async (lat, lng) => {
+    if (!googleMaps) {
+      return "Google Maps API not loaded yet";
+    }
+    const geocoder = new googleMaps.Geocoder();
+    const latlng = { lat: parseFloat(lat), lng: parseFloat(lng) };
+
+    return new Promise((resolve, reject) => {
+      geocoder.geocode({ location: latlng }, (results, status) => {
+        if (status === "OK") {
+          if (results[0]) {
+            resolve(results[0].formatted_address);
+          } else {
+            resolve("Address not found");
+          }
+        } else {
+          console.error("Geocoder failed due to:", status);
+          resolve("Error fetching address");
+        }
+      });
+    });
+  };
+
   const handleStartTrip = () => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setStartTime(new Date());
-        setStartCoords({
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        });
-        setStatus("Trip in progress...");
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        alert("Unable to access location. Please allow location services.");
-      }
-    );
+    console.log("Google Maps object in handleStartTrip:", googleMaps);
+    if (googleMaps) {
+      googleMaps.geolocation.getCurrentPosition(
+        async (position) => {
+          setStartTime(new Date());
+          setStartCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          const address = await getAddressFromCoords(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          setStartAddress(address);
+          console.log("Start Address:", address);
+          setStatus("Trip in progress...");
+        },
+        (error) => {
+          console.error("Geolocation error from Google Maps:", error);
+          alert(
+            "Unable to access location using Google Maps. Please ensure location services are enabled."
+          );
+        }
+      );
+    } else {
+      alert("Google Maps API not loaded yet.");
+    }
   };
 
   const handleEndTrip = () => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const endTime = new Date();
-        const endCoords = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-        };
+    if (googleMaps) {
+      googleMaps.geolocation.getCurrentPosition(
+        async (position) => {
+          const endTime = new Date();
+          const endCoords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
 
-        if (!startCoords) {
-          alert("Start location not set. Please start the trip first.");
-          return;
+          if (!startCoords) {
+            alert("Start location not set. Please start the trip first.");
+            return;
+          }
+
+          const distance = getDistanceInMiles(startCoords, endCoords);
+          const reimbursement = distance * 0.45;
+
+          const endAddress = await getAddressFromCoords(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          console.log("End Address:", endAddress);
+
+          addDoc(collection(db, "trips"), {
+            startTime,
+            endTime,
+            startCoordinates: startCoords,
+            endCoordinates: endCoords,
+            startAddress,
+            endAddress,
+            distance: distance.toFixed(2),
+            reimbursement: reimbursement.toFixed(2),
+          }).then(() => {
+            alert("Trip saved!");
+            setStatus("Trip ended");
+            setStartAddress(null);
+            fetchTrips();
+          });
+        },
+        (error) => {
+          console.error("Geolocation error from Google Maps:", error);
+          alert(
+            "Unable to access location using Google Maps. Please ensure location services are enabled."
+          );
         }
-
-        const distance = getDistanceInMiles(startCoords, endCoords);
-        const reimbursement = distance * 0.45;
-
-        addDoc(collection(db, "trips"), {
-          startTime,
-          endTime,
-          distance: distance.toFixed(2),
-          reimbursement: reimbursement.toFixed(2),
-        }).then(() => {
-          alert("Trip saved!");
-          setStatus("Trip ended");
-          fetchTrips();
-        });
-      },
-      (error) => {
-        console.error("Geolocation error:", error);
-        alert("Unable to access location. Please allow location services.");
-      }
-    );
+      );
+    } else {
+      alert("Google Maps API not loaded yet.");
+    }
   };
 
   const fetchTrips = async () => {
@@ -132,6 +214,8 @@ const TripTracker = () => {
                   <tr>
                     <th>Start Time</th>
                     <th>End Time</th>
+                    <th>Start Address</th>
+                    <th>End Address</th>
                     <th>Distance (miles)</th>
                     <th>Reimbursement (£)</th>
                   </tr>
@@ -147,6 +231,8 @@ const TripTracker = () => {
                       <td>
                         {new Date(trip.endTime.seconds * 1000).toLocaleString()}
                       </td>
+                      <td>{trip.startAddress}</td>
+                      <td>{trip.endAddress}</td>
                       <td>{trip.distance}</td>
                       <td>£{trip.reimbursement}</td>
                     </tr>
