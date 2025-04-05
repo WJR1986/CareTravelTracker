@@ -90,83 +90,92 @@ const TripTracker = () => {
 
   const handleStartTrip = () => {
     console.log("Google Maps object in handleStartTrip:", googleMaps);
-    if (googleMaps && googleMaps.geolocation) {
-      // Check if googleMaps and geolocation exist
-      googleMaps.geolocation.getCurrentPosition(
-        async (position) => {
-          setStartTime(new Date());
-          setStartCoords({
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          });
-          const address = await getAddressFromCoords(
-            position.coords.latitude,
-            position.coords.longitude
+
+    const attemptGetPosition = () => {
+      if (googleMaps && googleMaps.geolocation) {
+        // Introduce a small delay (e.g., 100 milliseconds)
+        setTimeout(() => {
+          googleMaps.geolocation.getCurrentPosition(
+            async (position) => {
+              setStartTime(new Date());
+              setStartCoords({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+              });
+              const address = await getAddressFromCoords(
+                position.coords.latitude,
+                position.coords.longitude
+              );
+              setStartAddress(address);
+              console.log("Start Address:", address);
+              setStatus("Trip in progress...");
+            },
+            (error) => {
+              console.error("Geolocation error from Google Maps:", error);
+              alert(
+                "Unable to access location using Google Maps. Please ensure location services are enabled."
+              );
+            }
           );
-          setStartAddress(address);
-          console.log("Start Address:", address);
-          setStatus("Trip in progress...");
-        },
-        (error) => {
-          console.error("Geolocation error from Google Maps:", error);
-          alert(
-            "Unable to access location using Google Maps. Please ensure location services are enabled."
-          );
-        }
-      );
-    } else {
-      alert("Google Maps API not fully loaded yet.");
-    }
+        }, 100); // Adjust the delay as needed
+      } else {
+        alert("Google Maps API not fully loaded yet.");
+      }
+    };
+
+    attemptGetPosition();
   };
 
   const handleEndTrip = () => {
     if (googleMaps && googleMaps.geolocation) {
-      // Check if googleMaps and geolocation exist
-      googleMaps.geolocation.getCurrentPosition(
-        async (position) => {
-          const endTime = new Date();
-          const endCoords = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
-          };
+      // Introduce a small delay
+      setTimeout(() => {
+        googleMaps.geolocation.getCurrentPosition(
+          async (position) => {
+            const endTime = new Date();
+            const endCoords = {
+              lat: position.coords.latitude,
+              lng: position.coords.longitude,
+            };
 
-          if (!startCoords) {
-            alert("Start location not set. Please start the trip first.");
-            return;
+            if (!startCoords) {
+              alert("Start location not set. Please start the trip first.");
+              return;
+            }
+
+            const distance = getDistanceInMiles(startCoords, endCoords);
+            const reimbursement = distance * 0.45;
+
+            const endAddress = await getAddressFromCoords(
+              position.coords.latitude,
+              position.coords.longitude
+            );
+            console.log("End Address:", endAddress);
+
+            addDoc(collection(db, "trips"), {
+              startTime,
+              endTime,
+              startCoordinates: startCoords,
+              endCoordinates: endCoords,
+              startAddress,
+              endAddress,
+              distance: distance.toFixed(2),
+              reimbursement: reimbursement.toFixed(2),
+            }).then(() => {
+              alert("Trip saved!");
+              setStatus("Trip ended");
+              setStartAddress(null);
+              fetchTrips();
+            });
+          },
+          (error) => {
+            console.error("Geolocation error from Google Maps:", error);
+            alert(
+              "Unable to access location using Google Maps. Please ensure location services are enabled."
+            );
           }
-
-          const distance = getDistanceInMiles(startCoords, endCoords);
-          const reimbursement = distance * 0.45;
-
-          const endAddress = await getAddressFromCoords(
-            position.coords.latitude,
-            position.coords.longitude
-          );
-          console.log("End Address:", endAddress);
-
-          addDoc(collection(db, "trips"), {
-            startTime,
-            endTime,
-            startCoordinates: startCoords,
-            endCoordinates: endCoords,
-            startAddress,
-            endAddress,
-            distance: distance.toFixed(2),
-            reimbursement: reimbursement.toFixed(2),
-          }).then(() => {
-            alert("Trip saved!");
-            setStatus("Trip ended");
-            setStartAddress(null);
-            fetchTrips();
-          });
-        },
-        (error) => {
-          console.error("Geolocation error from Google Maps:", error);
-          alert(
-            "Unable to access location using Google Maps. Please ensure location services are enabled."
-          );
-        }
-      );
+        );
+      }, 100); // Adjust the delay as needed
     } else {
       alert("Google Maps API not fully loaded yet.");
     }
