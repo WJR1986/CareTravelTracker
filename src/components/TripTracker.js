@@ -117,6 +117,7 @@ const TripTracker = () => {
           position.coords.longitude
         );
         setEndAddress(address);
+        console.log("End Address fetched:", address);
 
         addDoc(collection(db, "trips"), {
           startTime,
