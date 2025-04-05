@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { db } from "../firebaseConfig";
+import { db, auth } from "../firebaseConfig"; // Import auth
 import { collection, addDoc, getDocs } from "firebase/firestore";
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
@@ -167,29 +167,36 @@ const TripTracker = () => {
         setEndAddress(address);
         console.log("End Address fetched:", address);
 
-        const tripDataToSave = {
-          startTime,
-          endTime,
-          startCoordinates: startCoords,
-          endCoordinates: endCoords,
-          startAddress,
-          endAddress: address, // Explicitly use the fetched 'address' here
-          distance: distance.toFixed(2),
-          reimbursement: reimbursement.toFixed(2),
-        };
+        const currentUser = auth.currentUser; // Get the current user here
+        if (currentUser) {
+          const tripDataToSave = {
+            startTime,
+            endTime,
+            startCoordinates: startCoords,
+            endCoordinates: endCoords,
+            startAddress,
+            endAddress: address, // Explicitly use the fetched 'address' here
+            distance: distance.toFixed(2),
+            reimbursement: reimbursement.toFixed(2),
+            userId: currentUser.uid, // Add the user ID
+          };
 
-        console.log("Data being saved to Firestore:", tripDataToSave); // Add this line
+          console.log("Data being saved to Firestore:", tripDataToSave); // Add this line
 
-        addDoc(collection(db, "trips"), tripDataToSave).then(() => {
-          showAlertHandler("Trip saved!", "success"); // Use Bootstrap Alert
-          setStatus("Trip ended");
-          setIsLoading(false); // Set isLoading to false when the trip ends
-          fetchTrips();
-          setStartAddress(null);
-          setEndAddress(null);
-          setStartCoords(null);
-          setStartTime(null);
-        });
+          addDoc(collection(db, "trips"), tripDataToSave).then(() => {
+            showAlertHandler("Trip saved!", "success"); // Use Bootstrap Alert
+            setStatus("Trip ended");
+            setIsLoading(false); // Set isLoading to false when the trip ends
+            fetchTrips();
+            setStartAddress(null);
+            setEndAddress(null);
+            setStartCoords(null);
+            setStartTime(null);
+          });
+        } else {
+          showAlertHandler("You must be logged in to save trips.", "danger");
+          return;
+        }
       },
       (error) => {
         console.error("Geolocation error:", error);
@@ -220,11 +227,11 @@ const TripTracker = () => {
         {`
           .overlay-alert {
             position: fixed; /* Or absolute */
-            top: 20px;      /* Adjust as needed */
+            top: 40px;      /* Adjust as needed */
             left: 50%;     /* Center horizontally */
             transform: translateX(-50%); /* Adjust for centering */
             z-index: 1050;  /* Higher than most other elements */
-            width: 80%;    /* Adjust width as needed */
+            width: 25%;    /* Adjust width as needed */
           }
         `}
       </style>
