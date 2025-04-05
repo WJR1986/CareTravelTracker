@@ -70,8 +70,10 @@ const TripTracker = () => {
 
   const fetchTrips = useCallback(async () => {
     const querySnapshot = await getDocs(collection(db, "trips"));
-    setTripHistory(querySnapshot.docs.map((doc) => doc.data()));
-  }, [setTripHistory]); // Corrected dependencies for fetchTrips
+    const trips = querySnapshot.docs.map((doc) => doc.data());
+    setTripHistory(trips);
+    console.log("Fetched Trip History:", trips); // Added this line
+  }, [setTripHistory]);
 
   const handleStartTrip = useCallback(() => {
     navigator.geolocation.getCurrentPosition(
@@ -131,11 +133,24 @@ const TripTracker = () => {
         }).then(() => {
           alert("Trip saved!");
           setStatus("Trip ended");
-          fetchTrips();
+          // Instead of calling fetchTrips immediately, let's update the local state:
+          const newTrip = {
+            startTime,
+            endTime,
+            startCoordinates: startCoords,
+            endCoordinates: endCoords,
+            startAddress,
+            endAddress,
+            distance: distance.toFixed(2),
+            reimbursement: reimbursement.toFixed(2),
+          };
+          setTripHistory((prevHistory) => [...prevHistory, newTrip]);
           setStartAddress(null);
           setEndAddress(null);
           setStartCoords(null);
           setStartTime(null);
+          // We can still call fetchTrips to ensure the history is up-to-date, but maybe with a slight delay or in a different way.
+          // For now, let's see if this direct update works.
         });
       },
       (error) => {
@@ -151,7 +166,7 @@ const TripTracker = () => {
     startTime,
     startAddress,
     endAddress,
-  ]); // Added endAddress here
+  ]);
 
   useEffect(() => {
     fetchTrips();
