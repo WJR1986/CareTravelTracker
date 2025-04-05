@@ -24,7 +24,6 @@ const TripTracker = ({ user, onSignOut }) => {
   const [startAddress, setStartAddress] = useState(null);
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
-  const [endAddress, setEndAddress] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const google = useGoogleMaps(); // Use the hook to get the google object
 
@@ -185,7 +184,7 @@ const TripTracker = ({ user, onSignOut }) => {
           position.coords.latitude,
           position.coords.longitude
         );
-        setEndAddress(address);
+        // setEndAddress(address);
         console.log("End Address fetched:", address);
 
         const currentUser = auth.currentUser; // Get the current user here
