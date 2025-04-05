@@ -184,7 +184,6 @@ const TripTracker = ({ user, onSignOut }) => {
           position.coords.latitude,
           position.coords.longitude
         );
-        // setEndAddress(address);
         console.log("End Address fetched:", address);
 
         const currentUser = auth.currentUser; // Get the current user here
@@ -209,7 +208,6 @@ const TripTracker = ({ user, onSignOut }) => {
             setIsLoading(false); // Set isLoading to false when the trip ends
             fetchTrips();
             setStartAddress(null);
-            setEndAddress(null);
             setStartCoords(null);
             setStartTime(null);
           });
