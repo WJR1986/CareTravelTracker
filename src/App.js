@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect } from "react";
 import TripTracker from "./components/TripTracker";
-import Login from "./components/Login"; // Import the Login component
+import Login from "./components/Login";
 import Container from "react-bootstrap/Container";
-import { getAuth, onAuthStateChanged } from "firebase/auth";
+import { getAuth, onAuthStateChanged, signOut } from "firebase/auth"; // Import signOut
 
 function App() {
   const [user, setUser] = useState(null);
@@ -21,17 +21,30 @@ function App() {
       }
     });
 
-    return () => unsubscribe(); // Cleanup the listener
+    return () => unsubscribe();
   }, [auth]);
 
   const handleLoginSuccess = (loggedInUser) => {
     setUser(loggedInUser);
   };
 
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      console.log("User signed out successfully");
+    } catch (error) {
+      console.error("Error signing out:", error);
+    }
+  };
+
   return (
     <main className="bg-light min-vh-100">
       <Container fluid className="py-3">
-        {user ? <TripTracker /> : <Login onLoginSuccess={handleLoginSuccess} />}
+        {user ? (
+          <TripTracker user={user} onSignOut={handleSignOut} /> // Pass user and onSignOut as props
+        ) : (
+          <Login onLoginSuccess={handleLoginSuccess} />
+        )}
       </Container>
     </main>
   );

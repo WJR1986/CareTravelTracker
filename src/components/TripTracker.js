@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { db, auth } from "../firebaseConfig"; // Import auth
-import { collection, addDoc, getDocs } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, where } from "firebase/firestore"; // Import query and where
 import Container from "react-bootstrap/Container";
 import Row from "react-bootstrap/Row";
 import Col from "react-bootstrap/Col";
@@ -10,8 +10,15 @@ import Table from "react-bootstrap/Table";
 import Spinner from "react-bootstrap/Spinner";
 import Alert from "react-bootstrap/Alert"; // Import Bootstrap Alert
 import { useGoogleMaps } from "./googleMapsApi"; // Import the hook
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUserXmark } from "@fortawesome/free-solid-svg-icons";
+import {
+  faHouseMedicalFlag,
+  faCar,
+  faStopCircle,
+} from "@fortawesome/free-solid-svg-icons"; // Import new icons
 
-const TripTracker = () => {
+const TripTracker = ({ user, onSignOut }) => {
   const [startTime, setStartTime] = useState(null);
   const [startCoords, setStartCoords] = useState(null);
   const [startAddress, setStartAddress] = useState(null);
@@ -85,14 +92,28 @@ const TripTracker = () => {
   );
 
   const fetchTrips = useCallback(async () => {
-    const querySnapshot = await getDocs(collection(db, "trips"));
-    const trips = querySnapshot.docs.map((doc) => doc.data());
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      const q = query(
+        collection(db, "trips"),
+        where("userId", "==", currentUser.uid)
+      );
+      const querySnapshot = await getDocs(q);
+      const trips = querySnapshot.docs.map((doc) => doc.data());
 
-    // Sort trips by startTime in descending order (newest first)
-    trips.sort((a, b) => b.startTime.seconds - a.startTime.seconds);
+      // Sort trips by startTime in descending order (newest first)
+      trips.sort((a, b) => b.startTime.seconds - a.startTime.seconds);
 
-    setTripHistory(trips);
-    console.log("Fetched and Sorted Trip History:", trips);
+      setTripHistory(trips);
+      console.log(
+        "Fetched and Sorted Trip History for user:",
+        currentUser.uid,
+        trips
+      );
+    } else {
+      setTripHistory([]); // Clear the trip history if no user is logged in
+      console.log("No user logged in, clearing trip history.");
+    }
   }, [setTripHistory]);
 
   const handleStartTrip = useCallback(() => {
@@ -217,7 +238,10 @@ const TripTracker = () => {
   ]);
 
   useEffect(() => {
-    fetchTrips();
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      fetchTrips();
+    });
+    return unsubscribe; // Cleanup the listener when the component unmounts
   }, [fetchTrips]);
 
   console.log("Current tripHistory state:", tripHistory); // Add this line
@@ -225,19 +249,46 @@ const TripTracker = () => {
     <Container className="my-4">
       <style type="text/css">
         {`
-          .overlay-alert {
-            position: fixed; /* Or absolute */
-            top: 40px;      /* Adjust as needed */
-            left: 50%;     /* Center horizontally */
-            transform: translateX(-50%); /* Adjust for centering */
-            z-index: 1050;  /* Higher than most other elements */
-            width: 25%;    /* Adjust width as needed */
-          }
+         .overlay-alert {
+          position: fixed; /* Or absolute */
+          top: 40px;   /* Adjust as needed */
+          left: 50%;   /* Center horizontally */
+          transform: translateX(-50%); /* Adjust for centering */
+          z-index: 1050; /* Higher than most other elements */
+          width: 25%;  /* Adjust width as needed */
+         }
         `}
       </style>
+      <Row className="justify-content-center mb-2 align-items-center">
+        {" "}
+        {/* Added align-items-center */}
+        <Col md={8} className="text-center">
+          {user && (
+            <p className="text-muted mb-0">
+              {" "}
+              {/* Adjusted margin-bottom */}
+              Signed in as: <strong>{user.displayName || user.email}</strong>
+              <FontAwesomeIcon
+                icon={faUserXmark}
+                onClick={onSignOut}
+                style={{
+                  marginLeft: "10px",
+                  cursor: "pointer",
+                  fontSize: "1em",
+                  color: "grey",
+                }}
+                title="Log Out" // Add a title for accessibility
+              />
+            </p>
+          )}
+        </Col>
+      </Row>
       <Row className="justify-content-center mb-4">
         <Col md={8} className="text-center">
-          <h1 className="display-5">📍 Personal Mileage Tracker</h1>
+          <h1 className="display-5">
+            <FontAwesomeIcon icon={faHouseMedicalFlag} className="me-2" />{" "}
+            Personal Mileage Tracker
+          </h1>
           <p className="lead text-muted">
             {status}
             {console.log(
@@ -279,12 +330,12 @@ const TripTracker = () => {
             onClick={handleStartTrip}
             disabled={isLoading}
           >
-            🚗 Start Trip
+            <FontAwesomeIcon icon={faCar} className="me-2" /> Start Trip
           </Button>
         </Col>
         <Col xs="auto">
           <Button variant="danger" size="lg" onClick={handleEndTrip}>
-            🛑 End Trip
+            <FontAwesomeIcon icon={faStopCircle} className="me-2" /> End Trip
           </Button>
         </Col>
       </Row>
