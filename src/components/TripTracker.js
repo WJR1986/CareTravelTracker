@@ -121,36 +121,27 @@ const TripTracker = () => {
         setEndAddress(address);
         console.log("End Address fetched:", address);
 
-        addDoc(collection(db, "trips"), {
+        const tripDataToSave = {
           startTime,
           endTime,
           startCoordinates: startCoords,
           endCoordinates: endCoords,
           startAddress,
-          endAddress,
+          endAddress: address, // Explicitly use the fetched 'address' here
           distance: distance.toFixed(2),
           reimbursement: reimbursement.toFixed(2),
-        }).then(() => {
+        };
+
+        console.log("Data being saved to Firestore:", tripDataToSave); // Add this line
+
+        addDoc(collection(db, "trips"), tripDataToSave).then(() => {
           alert("Trip saved!");
           setStatus("Trip ended");
-          // Instead of calling fetchTrips immediately, let's update the local state:
-          const newTrip = {
-            startTime,
-            endTime,
-            startCoordinates: startCoords,
-            endCoordinates: endCoords,
-            startAddress,
-            endAddress,
-            distance: distance.toFixed(2),
-            reimbursement: reimbursement.toFixed(2),
-          };
-          setTripHistory((prevHistory) => [...prevHistory, newTrip]);
+          fetchTrips();
           setStartAddress(null);
           setEndAddress(null);
           setStartCoords(null);
           setStartTime(null);
-          // We can still call fetchTrips to ensure the history is up-to-date, but maybe with a slight delay or in a different way.
-          // For now, let's see if this direct update works.
         });
       },
       (error) => {
@@ -165,13 +156,13 @@ const TripTracker = () => {
     fetchTrips,
     startTime,
     startAddress,
-    endAddress,
   ]);
 
   useEffect(() => {
     fetchTrips();
   }, [fetchTrips]);
 
+  console.log("Current tripHistory state:", tripHistory); // Add this line
   return (
     <Container className="my-4">
       <Row className="justify-content-center mb-4">
