@@ -7,6 +7,7 @@ import Col from "react-bootstrap/Col";
 import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
 import Table from "react-bootstrap/Table";
+import Spinner from "react-bootstrap/Spinner";
 import { useGoogleMaps } from "./googleMapsApi"; // Import the hook
 
 const TripTracker = () => {
@@ -15,7 +16,8 @@ const TripTracker = () => {
   const [startAddress, setStartAddress] = useState(null);
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
-  // const [endAddress, setEndAddress] = useState(null);
+  const [endAddress, setEndAddress] = useState(null);
+  const [isStartingTrip, setIsStartingTrip] = useState(false);
   const google = useGoogleMaps(); // Use the hook to get the google object
 
   const toMiles = useCallback((km) => km * 0.621371, []);
@@ -80,6 +82,8 @@ const TripTracker = () => {
   }, [setTripHistory]);
 
   const handleStartTrip = useCallback(() => {
+    setIsStartingTrip(true); // Set loading to true
+
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         setStartTime(new Date());
@@ -93,10 +97,12 @@ const TripTracker = () => {
         );
         setStartAddress(address);
         setStatus("Trip in progress...");
+        setIsStartingTrip(false); // Set loading to false on success
       },
       (error) => {
         console.error("Geolocation error:", error);
         alert("Unable to access location. Please allow location services.");
+        setIsStartingTrip(false); // Set loading to false on error
       }
     );
   }, [getAddressFromCoords]);
@@ -178,9 +184,23 @@ const TripTracker = () => {
 
       <Row className="justify-content-center gap-3 mb-4">
         <Col xs="auto">
-          <Button variant="success" size="lg" onClick={handleStartTrip}>
-            🚗 Start Trip
-          </Button>
+          {isStartingTrip ? (
+            <Button variant="success" size="lg" disabled>
+              <Spinner
+                as="span"
+                animation="border"
+                size="sm"
+                role="status"
+                aria-hidden="true"
+                className="me-2"
+              />
+              Starting Trip...
+            </Button>
+          ) : (
+            <Button variant="success" size="lg" onClick={handleStartTrip}>
+              🚗 Start Trip
+            </Button>
+          )}
         </Col>
         <Col xs="auto">
           <Button variant="danger" size="lg" onClick={handleEndTrip}>
