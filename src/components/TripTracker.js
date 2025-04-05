@@ -90,7 +90,8 @@ const TripTracker = () => {
 
   const handleStartTrip = () => {
     console.log("Google Maps object in handleStartTrip:", googleMaps);
-    if (googleMaps) {
+    if (googleMaps && googleMaps.geolocation) {
+      // Check if googleMaps and geolocation exist
       googleMaps.geolocation.getCurrentPosition(
         async (position) => {
           setStartTime(new Date());
@@ -114,12 +115,13 @@ const TripTracker = () => {
         }
       );
     } else {
-      alert("Google Maps API not loaded yet.");
+      alert("Google Maps API not fully loaded yet.");
     }
   };
 
   const handleEndTrip = () => {
-    if (googleMaps) {
+    if (googleMaps && googleMaps.geolocation) {
+      // Check if googleMaps and geolocation exist
       googleMaps.geolocation.getCurrentPosition(
         async (position) => {
           const endTime = new Date();
@@ -166,7 +168,7 @@ const TripTracker = () => {
         }
       );
     } else {
-      alert("Google Maps API not loaded yet.");
+      alert("Google Maps API not fully loaded yet.");
     }
   };
 
