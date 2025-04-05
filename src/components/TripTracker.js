@@ -8,6 +8,7 @@ import Button from "react-bootstrap/Button";
 import Card from "react-bootstrap/Card";
 import Table from "react-bootstrap/Table";
 import Spinner from "react-bootstrap/Spinner";
+import Alert from "react-bootstrap/Alert"; // Import Bootstrap Alert
 import { useGoogleMaps } from "./googleMapsApi"; // Import the hook
 
 const TripTracker = () => {
@@ -17,8 +18,21 @@ const TripTracker = () => {
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
   const [endAddress, setEndAddress] = useState(null);
-  const [isStartingTrip, setIsStartingTrip] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const google = useGoogleMaps(); // Use the hook to get the google object
+
+  const [alertMessage, setAlertMessage] = useState(null);
+  const [alertType, setAlertType] = useState(null);
+  const [showAlert, setShowAlert] = useState(false);
+
+  const showAlertHandler = (message, type) => {
+    setAlertMessage(message);
+    setAlertType(type);
+    setShowAlert(true);
+    setTimeout(() => {
+      setShowAlert(false);
+    }, 3000); // Alert disappears after 3 seconds
+  };
 
   const toMiles = useCallback((km) => km * 0.621371, []);
 
@@ -82,7 +96,7 @@ const TripTracker = () => {
   }, [setTripHistory]);
 
   const handleStartTrip = useCallback(() => {
-    setIsStartingTrip(true); // Set loading to true
+    console.log("handleStartTrip called");
 
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -91,21 +105,40 @@ const TripTracker = () => {
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         });
-        const address = await getAddressFromCoords(
-          position.coords.latitude,
-          position.coords.longitude
-        );
-        setStartAddress(address);
         setStatus("Trip in progress...");
-        setIsStartingTrip(false); // Set loading to false on success
+        console.log("status set to:", status);
+        setIsLoading(true); // Set isLoading to true after setting status
+
+        try {
+          const addressPromise = getAddressFromCoords(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          addressPromise
+            .then((address) => {
+              setStartAddress(address);
+            })
+            .catch((error) => {
+              console.error("Error fetching address:", error);
+              showAlertHandler("Error fetching address.", "danger"); // Use Bootstrap Alert
+              // We don't set setIsLoading to false here because the trip is still considered in progress
+            });
+        } catch (error) {
+          console.error("Error during getAddressFromCoords promise:", error);
+          // We don't set setIsLoading to false here because the trip is still considered in progress
+        }
       },
       (error) => {
         console.error("Geolocation error:", error);
-        alert("Unable to access location. Please allow location services.");
-        setIsStartingTrip(false); // Set loading to false on error
+        showAlertHandler(
+          "Unable to access location. Please allow location services.",
+          "danger"
+        ); // Use Bootstrap Alert
+        setIsLoading(false); // Set loading to false if initial geolocation fails
+        setStatus("Ready to track your trips"); // Reset status if start fails
       }
     );
-  }, [getAddressFromCoords]);
+  }, [getAddressFromCoords, status, showAlertHandler]); // Added showAlertHandler to dependencies
 
   const handleEndTrip = useCallback(() => {
     navigator.geolocation.getCurrentPosition(
@@ -117,7 +150,10 @@ const TripTracker = () => {
         };
 
         if (!startCoords) {
-          alert("Start location not set. Please start the trip first.");
+          showAlertHandler(
+            "Start location not set. Please start the trip first.",
+            "danger"
+          ); // Use Bootstrap Alert
           return;
         }
 
@@ -145,8 +181,9 @@ const TripTracker = () => {
         console.log("Data being saved to Firestore:", tripDataToSave); // Add this line
 
         addDoc(collection(db, "trips"), tripDataToSave).then(() => {
-          alert("Trip saved!");
+          showAlertHandler("Trip saved!", "success"); // Use Bootstrap Alert
           setStatus("Trip ended");
+          setIsLoading(false); // Set isLoading to false when the trip ends
           fetchTrips();
           setStartAddress(null);
           setEndAddress(null);
@@ -156,7 +193,10 @@ const TripTracker = () => {
       },
       (error) => {
         console.error("Geolocation error:", error);
-        alert("Unable to access location. Please allow location services.");
+        showAlertHandler(
+          "Unable to access location. Please allow location services.",
+          "danger"
+        ); // Use Bootstrap Alert
       }
     );
   }, [
@@ -166,6 +206,7 @@ const TripTracker = () => {
     fetchTrips,
     startTime,
     startAddress,
+    showAlertHandler, // Added showAlertHandler to dependencies
   ]);
 
   useEffect(() => {
@@ -178,29 +219,48 @@ const TripTracker = () => {
       <Row className="justify-content-center mb-4">
         <Col md={8} className="text-center">
           <h1 className="display-5">📍 Personal Mileage Tracker</h1>
-          <p className="lead text-muted">{status}</p>
-        </Col>
-      </Row>
-
-      <Row className="justify-content-center gap-3 mb-4">
-        <Col xs="auto">
-          {isStartingTrip ? (
-            <Button variant="success" size="lg" disabled>
+          <p className="lead text-muted">
+            {status}
+            {console.log(
+              "Checking spinner condition: status =",
+              status,
+              ", isLoading =",
+              isLoading
+            )}{" "}
+            {/* Add this */}
+            {status === "Trip in progress..." && isLoading && (
               <Spinner
                 as="span"
                 animation="border"
                 size="sm"
                 role="status"
                 aria-hidden="true"
-                className="me-2"
+                className="ms-2"
               />
-              Starting Trip...
-            </Button>
-          ) : (
-            <Button variant="success" size="lg" onClick={handleStartTrip}>
-              🚗 Start Trip
-            </Button>
+            )}
+          </p>
+          {showAlert && (
+            <Alert
+              variant={alertType}
+              onClose={() => setShowAlert(false)}
+              dismissible
+            >
+              {alertMessage}
+            </Alert>
           )}
+        </Col>
+      </Row>
+
+      <Row className="justify-content-center gap-3 mb-4">
+        <Col xs="auto">
+          <Button
+            variant="success"
+            size="lg"
+            onClick={handleStartTrip}
+            disabled={isLoading}
+          >
+            🚗 Start Trip
+          </Button>
         </Col>
         <Col xs="auto">
           <Button variant="danger" size="lg" onClick={handleEndTrip}>
