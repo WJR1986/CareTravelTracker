@@ -17,7 +17,6 @@ const TripTracker = () => {
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
   const [googleMaps, setGoogleMaps] = useState(null);
-  const [isGeolocationReady, setIsGeolocationReady] = useState(false);
 
   const toMiles = useCallback((km) => km * 0.621371, []);
   const getDistanceInMiles = useCallback(
@@ -75,8 +74,9 @@ const TripTracker = () => {
 
   const handleStartTrip = useCallback(() => {
     console.log("Google Maps object in handleStartTrip:", googleMaps);
-    if (googleMaps && isGeolocationReady) {
-      googleMaps.geolocation.getCurrentPosition(
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
         async (position) => {
           setStartTime(new Date());
           setStartCoords({
@@ -92,20 +92,20 @@ const TripTracker = () => {
           setStatus("Trip in progress...");
         },
         (error) => {
-          console.error("Geolocation error from Google Maps:", error);
+          console.error("Geolocation error:", error);
           alert(
-            "Unable to access location using Google Maps. Please ensure location services are enabled."
+            "Unable to access location. Please ensure location services are enabled."
           );
         }
       );
     } else {
-      alert("Google Maps API or Geolocation not fully loaded yet.");
+      alert("Geolocation is not supported by this browser.");
     }
-  }, [googleMaps, isGeolocationReady, getAddressFromCoords]);
+  }, [getAddressFromCoords]);
 
   const handleEndTrip = useCallback(() => {
-    if (googleMaps && isGeolocationReady) {
-      googleMaps.geolocation.getCurrentPosition(
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
         async (position) => {
           const endTime = new Date();
           const endCoords = {
@@ -144,27 +144,24 @@ const TripTracker = () => {
           });
         },
         (error) => {
-          console.error("Geolocation error from Google Maps:", error);
+          console.error("Geolocation error:", error);
           alert(
-            "Unable to access location using Google Maps. Please ensure location services are enabled."
+            "Unable to access location. Please ensure location services are enabled."
           );
         }
       );
     } else {
-      alert("Google Maps API or Geolocation not fully loaded yet.");
+      alert("Geolocation is not supported by this browser.");
     }
   }, [
-    googleMaps,
-    isGeolocationReady,
     startCoords,
     startTime,
-    startAddress,
-    fetchTrips,
+    getDistanceInMiles,
+    getAddressFromCoords,
     addDoc,
     collection,
     db,
-    getDistanceInMiles,
-    getAddressFromCoords,
+    fetchTrips,
   ]);
 
   useEffect(() => {
@@ -178,23 +175,11 @@ const TripTracker = () => {
       script.onload = () => {
         setGoogleMaps(window.google.maps);
         console.log("Google Maps API loaded successfully!");
-        if (window.google.maps.geolocation) {
-          setIsGeolocationReady(true);
-          console.log("Google Maps Geolocation is ready.");
-        } else {
-          console.warn("Google Maps Geolocation is not available.");
-        }
       };
       document.head.appendChild(script);
     } else {
       setGoogleMaps(window.google.maps);
       console.log("Google Maps API was already loaded.");
-      if (window.google.maps.geolocation) {
-        setIsGeolocationReady(true);
-        console.log("Google Maps Geolocation was already ready.");
-      } else {
-        console.warn("Google Maps Geolocation is not available.");
-      }
     }
     fetchTrips();
 
