@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { db } from "../firebaseConfig";
 import { collection, addDoc, getDocs } from "firebase/firestore";
 import Container from "react-bootstrap/Container";
@@ -17,12 +17,160 @@ const TripTracker = () => {
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
   const [googleMaps, setGoogleMaps] = useState(null);
+  const [isGeolocationReady, setIsGeolocationReady] = useState(false);
+
+  const toMiles = useCallback((km) => km * 0.621371, []);
+  const getDistanceInMiles = useCallback(
+    (start, end) => {
+      const toRad = (value) => (value * Math.PI) / 180;
+      const R = 6371;
+
+      const dLat = toRad(end.lat - start.lat);
+      const dLon = toRad(end.lng - start.lng);
+      const lat1 = toRad(start.lat);
+      const lat2 = toRad(end.lat);
+
+      const a =
+        Math.sin(dLat / 2) ** 2 +
+        Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distanceKm = R * c;
+
+      return toMiles(distanceKm);
+    },
+    [toMiles]
+  );
+
+  const getAddressFromCoords = useCallback(
+    async (lat, lng) => {
+      if (!googleMaps) {
+        return "Google Maps API not loaded yet";
+      }
+      const geocoder = new googleMaps.Geocoder();
+      const latlng = { lat: parseFloat(lat), lng: parseFloat(lng) };
+
+      return new Promise((resolve, reject) => {
+        geocoder.geocode({ location: latlng }, (results, status) => {
+          if (status === "OK") {
+            if (results[0]) {
+              resolve(results[0].formatted_address);
+            } else {
+              resolve("Address not found");
+            }
+          } else {
+            console.error("Geocoder failed due to:", status);
+            resolve("Error fetching address");
+          }
+        });
+      });
+    },
+    [googleMaps]
+  );
+
+  const fetchTrips = useCallback(async () => {
+    const querySnapshot = await getDocs(collection(db, "trips"));
+    setTripHistory(querySnapshot.docs.map((doc) => doc.data()));
+  }, [db, collection, getDocs, setTripHistory]);
+
+  const handleStartTrip = useCallback(() => {
+    console.log("Google Maps object in handleStartTrip:", googleMaps);
+    if (googleMaps && isGeolocationReady) {
+      googleMaps.geolocation.getCurrentPosition(
+        async (position) => {
+          setStartTime(new Date());
+          setStartCoords({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          });
+          const address = await getAddressFromCoords(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          setStartAddress(address);
+          console.log("Start Address:", address);
+          setStatus("Trip in progress...");
+        },
+        (error) => {
+          console.error("Geolocation error from Google Maps:", error);
+          alert(
+            "Unable to access location using Google Maps. Please ensure location services are enabled."
+          );
+        }
+      );
+    } else {
+      alert("Google Maps API or Geolocation not fully loaded yet.");
+    }
+  }, [googleMaps, isGeolocationReady, getAddressFromCoords]);
+
+  const handleEndTrip = useCallback(() => {
+    if (googleMaps && isGeolocationReady) {
+      googleMaps.geolocation.getCurrentPosition(
+        async (position) => {
+          const endTime = new Date();
+          const endCoords = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          };
+
+          if (!startCoords) {
+            alert("Start location not set. Please start the trip first.");
+            return;
+          }
+
+          const distance = getDistanceInMiles(startCoords, endCoords);
+          const reimbursement = distance * 0.45;
+
+          const endAddress = await getAddressFromCoords(
+            position.coords.latitude,
+            position.coords.longitude
+          );
+          console.log("End Address:", endAddress);
+
+          addDoc(collection(db, "trips"), {
+            startTime,
+            endTime,
+            startCoordinates: startCoords,
+            endCoordinates: endCoords,
+            startAddress,
+            endAddress,
+            distance: distance.toFixed(2),
+            reimbursement: reimbursement.toFixed(2),
+          }).then(() => {
+            alert("Trip saved!");
+            setStatus("Trip ended");
+            setStartAddress(null);
+            fetchTrips();
+          });
+        },
+        (error) => {
+          console.error("Geolocation error from Google Maps:", error);
+          alert(
+            "Unable to access location using Google Maps. Please ensure location services are enabled."
+          );
+        }
+      );
+    } else {
+      alert("Google Maps API or Geolocation not fully loaded yet.");
+    }
+  }, [
+    googleMaps,
+    isGeolocationReady,
+    startCoords,
+    startTime,
+    startAddress,
+    fetchTrips,
+    addDoc,
+    collection,
+    db,
+    getDistanceInMiles,
+    getAddressFromCoords,
+  ]);
 
   useEffect(() => {
     console.log("TripTracker component mounted");
-    console.log("Maps API Key from env:", Maps_API_KEY); // Add this line
+    console.log("Maps API Key from env:", Maps_API_KEY);
     if (!window.google || !window.google.maps) {
-      // Check if the API is already in the window
       const script = document.createElement("script");
       script.src = `https://maps.googleapis.com/maps/api/js?key=${Maps_API_KEY}&libraries=places`;
       script.async = true;
@@ -30,165 +178,34 @@ const TripTracker = () => {
       script.onload = () => {
         setGoogleMaps(window.google.maps);
         console.log("Google Maps API loaded successfully!");
+        if (window.google.maps.geolocation) {
+          setIsGeolocationReady(true);
+          console.log("Google Maps Geolocation is ready.");
+        } else {
+          console.warn("Google Maps Geolocation is not available.");
+        }
       };
       document.head.appendChild(script);
     } else {
-      setGoogleMaps(window.google.maps); // If already loaded, set the state
+      setGoogleMaps(window.google.maps);
       console.log("Google Maps API was already loaded.");
+      if (window.google.maps.geolocation) {
+        setIsGeolocationReady(true);
+        console.log("Google Maps Geolocation was already ready.");
+      } else {
+        console.warn("Google Maps Geolocation is not available.");
+      }
     }
     fetchTrips();
 
     return () => {
       console.log("TripTracker component unmounted");
-      // Any cleanup logic can go here
     };
-  }, []);
-
-  const toMiles = (km) => km * 0.621371;
-
-  const getDistanceInMiles = (start, end) => {
-    const toRad = (value) => (value * Math.PI) / 180;
-    const R = 6371;
-
-    const dLat = toRad(end.lat - start.lat);
-    const dLon = toRad(end.lng - start.lng);
-    const lat1 = toRad(start.lat);
-    const lat2 = toRad(end.lat);
-
-    const a =
-      Math.sin(dLat / 2) ** 2 +
-      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    const distanceKm = R * c;
-
-    return toMiles(distanceKm);
-  };
-
-  const getAddressFromCoords = async (lat, lng) => {
-    if (!googleMaps) {
-      return "Google Maps API not loaded yet";
-    }
-    const geocoder = new googleMaps.Geocoder();
-    const latlng = { lat: parseFloat(lat), lng: parseFloat(lng) };
-
-    return new Promise((resolve, reject) => {
-      geocoder.geocode({ location: latlng }, (results, status) => {
-        if (status === "OK") {
-          if (results[0]) {
-            resolve(results[0].formatted_address);
-          } else {
-            resolve("Address not found");
-          }
-        } else {
-          console.error("Geocoder failed due to:", status);
-          resolve("Error fetching address");
-        }
-      });
-    });
-  };
-
-  const handleStartTrip = () => {
-    console.log("Google Maps object in handleStartTrip:", googleMaps);
-
-    const attemptGetPosition = () => {
-      if (googleMaps && googleMaps.geolocation) {
-        // Introduce a small delay (e.g., 100 milliseconds)
-        setTimeout(() => {
-          googleMaps.geolocation.getCurrentPosition(
-            async (position) => {
-              setStartTime(new Date());
-              setStartCoords({
-                lat: position.coords.latitude,
-                lng: position.coords.longitude,
-              });
-              const address = await getAddressFromCoords(
-                position.coords.latitude,
-                position.coords.longitude
-              );
-              setStartAddress(address);
-              console.log("Start Address:", address);
-              setStatus("Trip in progress...");
-            },
-            (error) => {
-              console.error("Geolocation error from Google Maps:", error);
-              alert(
-                "Unable to access location using Google Maps. Please ensure location services are enabled."
-              );
-            }
-          );
-        }, 100); // Adjust the delay as needed
-      } else {
-        alert("Google Maps API not fully loaded yet.");
-      }
-    };
-
-    attemptGetPosition();
-  };
-
-  const handleEndTrip = () => {
-    if (googleMaps && googleMaps.geolocation) {
-      // Introduce a small delay
-      setTimeout(() => {
-        googleMaps.geolocation.getCurrentPosition(
-          async (position) => {
-            const endTime = new Date();
-            const endCoords = {
-              lat: position.coords.latitude,
-              lng: position.coords.longitude,
-            };
-
-            if (!startCoords) {
-              alert("Start location not set. Please start the trip first.");
-              return;
-            }
-
-            const distance = getDistanceInMiles(startCoords, endCoords);
-            const reimbursement = distance * 0.45;
-
-            const endAddress = await getAddressFromCoords(
-              position.coords.latitude,
-              position.coords.longitude
-            );
-            console.log("End Address:", endAddress);
-
-            addDoc(collection(db, "trips"), {
-              startTime,
-              endTime,
-              startCoordinates: startCoords,
-              endCoordinates: endCoords,
-              startAddress,
-              endAddress,
-              distance: distance.toFixed(2),
-              reimbursement: reimbursement.toFixed(2),
-            }).then(() => {
-              alert("Trip saved!");
-              setStatus("Trip ended");
-              setStartAddress(null);
-              fetchTrips();
-            });
-          },
-          (error) => {
-            console.error("Geolocation error from Google Maps:", error);
-            alert(
-              "Unable to access location using Google Maps. Please ensure location services are enabled."
-            );
-          }
-        );
-      }, 100); // Adjust the delay as needed
-    } else {
-      alert("Google Maps API not fully loaded yet.");
-    }
-  };
-
-  const fetchTrips = async () => {
-    const querySnapshot = await getDocs(collection(db, "trips"));
-    setTripHistory(querySnapshot.docs.map((doc) => doc.data()));
-  };
+  }, [fetchTrips, Maps_API_KEY]);
 
   useEffect(() => {
     fetchTrips();
-  }, []);
+  }, [fetchTrips]);
 
   return (
     <Container className="my-4">
