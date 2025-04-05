@@ -20,6 +20,7 @@ const TripTracker = () => {
 
   useEffect(() => {
     console.log("TripTracker component mounted");
+    console.log("Maps API Key from env:", Maps_API_KEY); // Add this line
     if (!window.google || !window.google.maps) {
       // Check if the API is already in the window
       const script = document.createElement("script");
