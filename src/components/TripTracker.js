@@ -15,7 +15,7 @@ const TripTracker = () => {
   const [startAddress, setStartAddress] = useState(null);
   const [tripHistory, setTripHistory] = useState([]);
   const [status, setStatus] = useState("Ready to track your trips");
-  const [endAddress, setEndAddress] = useState(null);
+  // const [endAddress, setEndAddress] = useState(null);
   const google = useGoogleMaps(); // Use the hook to get the google object
 
   const toMiles = useCallback((km) => km * 0.621371, []);
@@ -71,8 +71,12 @@ const TripTracker = () => {
   const fetchTrips = useCallback(async () => {
     const querySnapshot = await getDocs(collection(db, "trips"));
     const trips = querySnapshot.docs.map((doc) => doc.data());
+
+    // Sort trips by startTime in descending order (newest first)
+    trips.sort((a, b) => b.startTime.seconds - a.startTime.seconds);
+
     setTripHistory(trips);
-    console.log("Fetched Trip History:", trips); // Added this line
+    console.log("Fetched and Sorted Trip History:", trips);
   }, [setTripHistory]);
 
   const handleStartTrip = useCallback(() => {
